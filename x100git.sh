@@ -1,0 +1,86 @@
+#!/bin/bash
+set -e  # зупиняти скрипт при помилках
+
+USER_ID="$1"
+
+if [ -z "$USER_ID" ]; then
+    echo "❌ Помилка: потрібно вказати itArmyUserId як аргумент!"
+    echo "   Приклад запуску: ./x100+p.sh 1278306477"
+    exit 1
+fi
+
+# === Підготовка середовища ===
+cd ~
+apt update -y
+rm -rf x100-for-docker
+apt install -y git wget screen mc vnstat tmux sed unzip
+
+
+# === Встановлення Docker без конфліктів ===
+if dpkg -l | grep -q moby; then
+    echo "⚠️ Виявлено moby-пакети. Видаляю..."
+    apt remove -y moby-engine moby-containerd moby-cli || true
+fi
+
+if ! apt install -y docker.io; then
+    echo "⚠️ docker.io не встановився, пробую офіційні пакети Docker CE..."
+    apt install -y docker-ce docker-ce-cli containerd.io
+fi
+
+# === Клонування репозиторію ===
+git clone https://github.com/TatoEb/adss-x100.git
+cd adss-x100
+chmod +x *.sh
+
+# Копіюємо файли з подальшим очищенням
+cd ~
+cp ~/adss-x100/*.* ~
+rm -rf x100-for-docker adss-x100
+
+# === Запуск основного інсталятора ===
+bash adss-x100.bash
+
+# === Налаштування x100-config.txt ===
+cd ~/x100-for-docker/put-your-ovpn-files-here/
+
+sed -i -E "
+  s/\r$//;  # фікс Windows CRLF
+  s/initialDistressScale=50/initialDistressScale=1500/;
+  s/delayAfterSessionMinDuration=15/delayAfterSessionMinDuration=1/;
+  s/delayAfterSessionMaxDuration=45/delayAfterSessionMaxDuration=5/;
+  s/itArmyUserId=77777777/itArmyUserId=${USER_ID}/;
+  s/fixedVpnConnectionsQuantity=0/fixedVpnConnectionsQuantity=5/;
+  s/networkUsageGoal=80%/networkUsageGoal=650/;
+  s/oneSessionMinDuration=600/oneSessionMinDuration=400/;
+  s/oneSessionMaxDuration=900/oneSessionMaxDuration=700/;
+" x100-config.txt
+
+chmod -R 777 ~/x100-for-docker
+
+# === Видалення зайвого ===
+cd ~
+./no-free.sh
+rm -rf adss-x100.bash no-free.sh run.sh bac.sh res.sh InstallX100.sh README.md
+
+# === Робота з OVPN ===
+cp ovpn.zip ~/x100-for-docker/put-your-ovpn-files-here
+rm -f ovpn.zip
+cd ~/x100-for-docker/put-your-ovpn-files-here
+unzip -qq ovpn.zip
+rm -f ovpn.zip
+
+# === Введення credential'ів ===
+cd ~/x100-for-docker/put-your-ovpn-files-here/P-do
+mcedit credentials.txt
+
+# === Фінальні кроки + запуск атаки ===
+cd ~/x100-for-docker/put-your-ovpn-files-here
+rm -rf H.me
+clear
+cd
+./X100.sh
+
+# === Очищення історії ===
+history -c
+history -w
+history -c
